@@ -1,7 +1,8 @@
 import { Router } from "express";
 import bcrypt from "bcrypt";
-import jwt, { JwtPayload } from "jsonwebtoken";
+import jwt from "jsonwebtoken";
 import Models from "../db";
+import isLoggedIn from "../middleware";
 const userRouter = Router();
 
 userRouter.post("/signup", async (req,res) => {
@@ -43,24 +44,7 @@ userRouter.post("/signin", async  (req,res) => {
     })
 });
 //@ts-ignore
-async function isLoggedIn(req,res,next) {
-    try {
-    const token = req.headers.token;
-    if(!process.env.JWT_SECRET){
-        res.status(498).send("SECRET KEY ERROR");
-        return;
-    }
-    const decodedData = jwt.verify(token, process.env.JWT_SECRET) as JwtPayload ;
-    if(!decodedData) {
-    res.status(401).send({message : "Authorization Failed"});
-    return;
-    }
-    req.id = decodedData.id;
-    next();
-    }catch(e){
-        console.log("Error");
-    }
-}
+
 userRouter.post("/content",isLoggedIn,async  (req,res) => {
     const userId = req.id; // to solve id issues i created a types.d.ts please take a look at that file
     const {link , type ,title, tags } = req.body;
@@ -76,7 +60,7 @@ userRouter.post("/content",isLoggedIn,async  (req,res) => {
 
 userRouter.get("/content",isLoggedIn,async(req,res) => {
     const userId = req.id;
-    const contents = await Models.ContentModel.findOne({userId});
+    const contents = await Models.ContentModel.findOne({userId}).populate("userId","username");
     if(!contents) {
         res.status(404).send({message : "user contents not found"});
         return;
@@ -85,5 +69,30 @@ userRouter.get("/content",isLoggedIn,async(req,res) => {
         contents
     })
 });
+
+userRouter.delete("/content",isLoggedIn,async (req,res) => {
+    try{
+    const userId = req.id;
+    const contentId = req.body.contentId;
+    
+    const deletedContent =await Models.ContentModel.findByIdAndDelete({
+        _id : contentId,
+        userId
+    });
+    if(!deletedContent){
+        res.status(404).send({message : "NO content found"})
+    }
+    res.status(200).json({
+        message : "deleted!!!",
+        deletedContent
+
+    })
+}catch(e) {
+    console.log("Error On delete Content");
+    res.status(500).json({
+        message : "ERROR"
+    })
+}
+})
 
 export default userRouter;
